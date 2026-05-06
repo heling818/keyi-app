@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0e17">
+<link rel="manifest" href="app.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>清洗机器人远程控制</title>
+<style>
+:root{--bg:#0a0e17;--panel:#111827;--card:#1e293b;--accent:#3b82f6;--green:#22c55e;--red:#ef4444;--orange:#f59e0b;--text:#e2e8f0;--muted:#64748b;--border:#334155}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+.page{display:none;padding:16px;padding-bottom:80px;padding-top:calc(env(safe-area-inset-top,20px) + 16px)}
+.page.active{display:block}
+
+/* Tab Bar */
+.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--border);display:flex;padding:8px 0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:100}
+.tab-item{flex:1;text-align:center;padding:6px 0;cursor:pointer;transition:.2s}
+.tab-item .tab-icon{font-size:20px;display:block}
+.tab-item .tab-label{font-size:10px;color:var(--muted);margin-top:2px}
+.tab-item.active .tab-label{color:var(--accent)}
+
+/* Common */
+.top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.page-title{font-size:20px;font-weight:700}
+.conn-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;background:rgba(239,68,68,.15)}
+.conn-badge.online{background:rgba(34,197,94,.15)}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--red)}
+.conn-badge.online .conn-dot{background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.section-title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 10px}
+.card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:10px}
+.btn{display:flex;align-items:center;justify-content:center;padding:12px;border-radius:10px;font-size:14px;font-weight:600;color:#fff;cursor:pointer;transition:.15s;user-select:none;-webkit-tap-highlight-color:transparent}
+.btn:active{transform:scale(.95);opacity:.8}
+.btn-primary{background:var(--accent)}
+.btn-danger{background:var(--red)}
+.btn-success{background:var(--green)}
+.btn-warning{background:var(--orange)}
+.btn-dark{background:var(--border)}
+.btn.disabled{opacity:.4;pointer-events:none}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+
+/* Connect Page */
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;color:var(--muted);margin-bottom:4px;display:block}
+.form-input{width:100%;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none}
+.form-input:focus{border-color:var(--accent)}
+
+/* Dashboard */
+.gauges{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.gauge-card{background:var(--panel);border-radius:12px;padding:14px;text-align:center}
+.gauge-value{font-size:28px;font-weight:700}
+.gauge-label{font-size:11px;color:var(--muted);margin-top:4px}
+.gauge-bar{height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:3px;transition:width .5s}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.info-item{background:var(--card);border-radius:10px;padding:10px 12px}
+.info-item .label{font-size:11px;color:var(--muted)}
+.info-item .value{font-size:14px;font-weight:600;margin-top:2px}
+.reel-section{background:var(--panel);border-radius:12px;padding:14px}
+.reel-bar{height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin:8px 0}
+.reel-fill{height:100%;background:linear-gradient(90deg,var(--accent),#60a5fa);border-radius:5px;transition:width .5s}
+
+/* Control - Direction Pad */
+.dpad{display:grid;grid-template-columns:64px 64px 64px;grid-template-rows:64px 64px 64px;gap:6px;justify-content:center;margin:12px 0}
+.dpad-btn{display:flex;align-items:center;justify-content:center;background:var(--card);border-radius:12px;border:1px solid var(--border);font-size:18px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:.1s}
+.dpad-btn:active{background:var(--accent);border-color:#60a5fa;transform:scale(.9)}
+.dpad-center{background:#7f1d1d;border-color:var(--red);font-size:11px;font-weight:700;color:#fca5a5}
+.dpad-center:active{background:var(--red)}
+
+/* Alarm */
+.alarm-item{display:flex;align-items:center;gap:10px;background:var(--panel);border-radius:10px;padding:12px;margin-bottom:8px}
+.alarm-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.alarm-dot.critical{background:var(--red)}
+.alarm-dot.warning{background:var(--orange)}
+.alarm-info{flex:1}
+.alarm-name{font-size:13px;font-weight:600}
+.alarm-time{font-size:11px;color:var(--muted)}
+
+/* Settings Slider */
+.param-card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:10px}
+.param-header{display:flex;justify-content:space-between;margin-bottom:8px}
+.param-name{font-size:13px;color:var(--muted)}
+.param-val{font-size:15px;font-weight:700;color:var(--accent)}
+input[type=range]{width:100%;margin:6px 0;accent-color:var(--accent)}
+
+/* Toast */
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:8px 20px;border-radius:20px;font-size:13px;z-index:999;opacity:0;transition:.3s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* Vision Mode Tabs */
+.vision-mode{padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;background:var(--card);color:var(--muted);border:1px solid var(--border);white-space:nowrap;cursor:pointer;transition:.2s}
+.vision-mode.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<!-- 微信/QQ浏览器引导遮罩 -->
+<div id="wechat-mask" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.92);z-index:99999;color:#fff;padding:30px 24px;text-align:center">
+  <div style="margin-top:60px">
+    <div style="font-size:48px;margin-bottom:20px">↗</div>
+    <h2 style="font-size:20px;margin-bottom:16px">请在浏览器中打开</h2>
+    <p style="font-size:15px;color:#aaa;line-height:1.8;margin-bottom:30px">
+      微信/QQ内置浏览器不支持APP安装和完整功能<br>
+      请按以下步骤操作：
+    </p>
+    <div style="text-align:left;background:rgba(255,255,255,.08);border-radius:12px;padding:20px;font-size:14px;line-height:2">
+      <p><b style="color:#60a5fa">步骤1：</b>点击右上角 <b style="color:#f59e0b">···</b> 菜单</p>
+      <p><b style="color:#60a5fa">步骤2：</b>选择「<b style="color:#22c55e">在浏览器中打开</b>」</p>
+      <p><b style="color:#60a5fa">步骤3：</b>在浏览器中点击菜单 → 添加到主屏幕</p>
+    </div>
+    <div style="margin-top:30px;padding:16px;background:rgba(59,130,246,.15);border-radius:10px;font-size:13px;color:#93c5fd">
+      提示：添加到主屏幕后，下次可直接从桌面图标打开，体验与原生APP一致
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var ua = navigator.userAgent.toLowerCase();
+  if (/micromessenger|qq\/|weibo|alipay/i.test(ua)) {
+    document.getElementById('wechat-mask').style.display = 'block';
+  }
+})();
+</script>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== Page: Connect ===== -->
+<div class="page active" id="page-connect">
+  <div class="top-bar"><span class="page-title">连接配置</span></div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:20px">配置MQTT Broker连接到清洗机器人</p>
+  <div class="form-group">
+    <label class="form-label">Broker地址</label>
+    <input class="form-input" id="cfg-broker" value="broker.emqx.io">
+  </div>
+  <div class="form-group">
+    <label class="form-label">WebSocket端口 (HTTPS自动切换wss:8084)</label>
+    <input class="form-input" id="cfg-port" type="number" value="8083">
+  </div>
+  <div class="form-group">
+    <label class="form-label">设备ID</label>
+    <input class="form-input" id="cfg-device" value="robot_001">
+  </div>
+  <div class="form-group">
+    <label class="form-label">用户名 (可选)</label>
+    <input class="form-input" id="cfg-user" placeholder="留空无需认证">
+  </div>
+  <div class="form-group">
+    <label class="form-label">密码 (可选)</label>
+    <input class="form-input" id="cfg-pass" type="password">
+  </div>
+  <div class="btn btn-primary" id="btn-connect" onclick="doConnect()">连接</div>
+</div>
+
+<!-- ===== Page: Dashboard ===== -->
+<div class="page" id="page-dashboard">
+  <div class="top-bar">
+    <span class="page-title">仪表盘</span>
+    <div class="conn-badge" id="conn-badge"><div class="conn-dot"></div><span id="conn-text">未连接</span></div>
+  </div>
+  <div style="margin-bottom:12px">
+    <span id="state-badge" style="display:inline-block;padding:4px 14px;border-radius:20px;font-size:13px;font-weight:600;background:rgba(34,197,94,.15);color:var(--green)">就绪待机</span>
+  </div>
+  <div class="gauges">
+    <div class="gauge-card">
+      <div class="gauge-value" id="v-battery" style="color:var(--green)">--</div>
+      <div class="gauge-label">电池 %</div>
+      <div class="gauge-bar"><div class="gauge-fill" id="bar-battery" style="width:0%;background:var(--green)"></div></div>
+    </div>
+    <div class="gauge-card">
+      <div class="gauge-value" id="v-water" style="color:var(--accent)">--</div>
+      <div class="gauge-label">清水 %</div>
+      <div class="gauge-bar"><div class="gauge-fill" id="bar-water" style="width:0%;background:var(--accent)"></div></div>
+    </div>
+    <div class="gauge-card">
+      <div class="gauge-value" id="v-disinf" style="color:#a855f7">--</div>
+      <div class="gauge-label">消毒液 %</div>
+      <div class="gauge-bar"><div class="gauge-fill" id="bar-disinf" style="width:0%;background:#a855f7"></div></div>
+    </div>
+    <div class="gauge-card">
+      <div class="gauge-value" id="v-pressure" style="color:var(--orange)">--</div>
+      <div class="gauge-label">水压 MPa</div>
+      <div class="gauge-bar"><div class="gauge-fill" id="bar-pressure" style="width:0%;background:var(--orange)"></div></div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-item"><div class="label">位置</div><div class="value" id="v-pos">0.00, 0.00 m</div></div>
+    <div class="info-item"><div class="label">超声波</div><div class="value" id="v-ultra">前--mm 后--mm</div></div>
+    <div class="info-item"><div class="label">冲洗面积</div><div class="value" id="v-area">-- m2</div></div>
+    <div class="info-item"><div class="label">IMU倾角</div><div class="value" id="v-imu">--°</div></div>
+  </div>
+  <div class="reel-section">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--muted)">卷管器</span>
+      <span style="font-size:16px;font-weight:700;color:var(--accent)" id="v-reel">0%</span>
+      <span id="reel-mode" style="font-size:11px;color:var(--green);display:none">自动跟随</span>
+    </div>
+    <div class="reel-bar"><div class="reel-fill" id="bar-reel" style="width:0%"></div></div>
+    <div style="display:flex;gap:8px;font-size:11px;color:var(--muted)">
+      <span id="v-valve">补水阀: 关闭</span>
+      <span id="v-tank"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Page: Control ===== -->
+<div class="page" id="page-control">
+  <div class="top-bar"><span class="page-title">远程控制</span></div>
+  <div class="section-title">工作模式</div>
+  <div class="grid-2">
+    <div class="btn btn-primary" onclick="sendCmd('mode_wash')">高压冲洗</div>
+    <div class="btn btn-success" onclick="sendCmd('mode_disinfect')">消毒喷雾</div>
+    <div class="btn btn-primary" onclick="sendCmd('mode_compound')">复合清洗</div>
+    <div class="btn btn-warning" onclick="sendCmd('mode_manual')">手动模式</div>
+  </div>
+  <div class="section-title">操作</div>
+  <div class="grid-2">
+    <div class="btn btn-success" onclick="sendCmd('start')">启动</div>
+    <div class="btn btn-warning" onclick="sendCmd('stop')">停止</div>
+    <div class="btn btn-danger" onclick="confirmEstop()">紧急停止</div>
+    <div class="btn btn-dark" onclick="sendCmd('fault_reset')">故障复位</div>
+    <div class="btn btn-warning" onclick="sendCmd('return_charge')" style="grid-column:span 2">返回充电</div>
+  </div>
+  <div class="section-title">手动方向 (按住移动 松开停止)</div>
+  <div class="dpad">
+    <div></div>
+    <div class="dpad-btn" ontouchstart="sendMove(1)" ontouchend="sendMove(0)" onmousedown="sendMove(1)" onmouseup="sendMove(0)">&#x25B2;</div>
+    <div></div>
+    <div class="dpad-btn" ontouchstart="sendMove(3)" ontouchend="sendMove(0)" onmousedown="sendMove(3)" onmouseup="sendMove(0)">&#x25C0;</div>
+    <div class="dpad-btn dpad-center" onclick="sendMove(0)">STOP</div>
+    <div class="dpad-btn" ontouchstart="sendMove(4)" ontouchend="sendMove(0)" onmousedown="sendMove(4)" onmouseup="sendMove(0)">&#x25B6;</div>
+    <div></div>
+    <div class="dpad-btn" ontouchstart="sendMove(2)" ontouchend="sendMove(0)" onmousedown="sendMove(2)" onmouseup="sendMove(0)">&#x25BC;</div>
+    <div></div>
+  </div>
+  <div class="section-title">卷管器 / 补水</div>
+  <div class="grid-3">
+    <div class="btn btn-dark" ontouchstart="sendCmd('reel_in')" ontouchend="sendCmd('reel_stop')">收管</div>
+    <div class="btn btn-danger" onclick="sendCmd('reel_stop')" style="font-size:12px">停止</div>
+    <div class="btn btn-dark" ontouchstart="sendCmd('reel_out')" ontouchend="sendCmd('reel_stop')">放管</div>
+  </div>
+  <div class="grid-2" style="margin-top:8px">
+    <div class="btn btn-primary" onclick="sendCmd('reel_auto')">自动跟随</div>
+    <div class="btn btn-success" onclick="sendCmd('water_on')">开启补水</div>
+  </div>
+  <div class="btn btn-warning" style="margin-top:8px" onclick="sendCmd('water_off')">关闭补水</div>
+</div>
+
+<!-- ===== Page: Alarm ===== -->
+<div class="page" id="page-alarm">
+  <div class="top-bar"><span class="page-title">报警管理</span><span id="alarm-count" style="background:var(--red);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;display:none">0</span></div>
+  <div class="btn btn-dark" onclick="clearAlarms()" style="margin-bottom:12px;font-size:13px">全部确认</div>
+  <div id="alarm-list">
+    <div style="text-align:center;padding:40px 0;color:var(--muted);font-size:13px">暂无报警记录</div>
+  </div>
+</div>
+
+<!-- ===== Page: Settings ===== -->
+<div class="page" id="page-settings">
+  <div class="top-bar"><span class="page-title">参数设定</span></div>
+  <div class="param-card">
+    <div class="param-header"><span class="param-name">冲洗压力</span><span class="param-val" id="pv-pressure">10.0 MPa</span></div>
+    <input type="range" min="5" max="20" step="0.5" value="10" id="sl-pressure" oninput="updateSlider(1,this)">
+    <div class="btn btn-primary" style="margin-top:8px;padding:8px;font-size:13px" onclick="applyParam(1)">应用</div>
+  </div>
+  <div class="param-card">
+    <div class="param-header"><span class="param-name">行进速度</span><span class="param-val" id="pv-speed">0.20 m/s</span></div>
+    <input type="range" min="0.05" max="0.5" step="0.01" value="0.2" id="sl-speed" oninput="updateSlider(2,this)">
+    <div class="btn btn-primary" style="margin-top:8px;padding:8px;font-size:13px" onclick="applyParam(2)">应用</div>
+  </div>
+  <div class="param-card">
+    <div class="param-header"><span class="param-name">消毒液浓度</span><span class="param-val" id="pv-conc">2.0 %</span></div>
+    <input type="range" min="0.1" max="5" step="0.1" value="2" id="sl-conc" oninput="updateSlider(3,this)">
+    <div class="btn btn-primary" style="margin-top:8px;padding:8px;font-size:13px" onclick="applyParam(3)">应用</div>
+  </div>
+  <div class="section-title">系统</div>
+  <div class="card" onclick="switchPage('connect')" style="cursor:pointer;display:flex;justify-content:space-between">
+    <span>MQTT连接设置</span><span style="color:var(--muted)">&rsaquo;</span>
+  </div>
+  <div class="section-title" style="margin-top:16px">分享APP</div>
+  <div class="card" style="text-align:center;padding:20px">
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">扫码或分享链接给其他人使用</p>
+    <canvas id="share-qr" style="margin:0 auto;display:block;max-width:200px;width:100%;height:auto"></canvas>
+    <p id="share-url" style="font-size:12px;color:var(--accent);margin-top:10px;word-break:break-all"></p>
+    <div class="btn btn-primary" style="margin-top:10px;padding:10px;font-size:13px" onclick="copyShareLink()">复制链接</div>
+  </div>
+</div>
+
+<!-- ===== Page: Vision (视觉监控) ===== -->
+<div class="page" id="page-vision">
+  <div class="top-bar">
+    <span class="page-title">视觉监控</span>
+    <div class="conn-badge" id="vision-status" style="background:rgba(34,197,94,.15)"><div class="conn-dot" style="background:var(--green)"></div><span>AI就绪</span></div>
+  </div>
+
+  <!-- 检测模式切换 -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;overflow-x:auto">
+    <div class="vision-mode active" id="vmode-clean" onclick="switchVisionMode('clean')">清洁度检测</div>
+    <div class="vision-mode" id="vmode-pig" onclick="switchVisionMode('pig')">猪只识别</div>
+    <div class="vision-mode" id="vmode-env" onclick="switchVisionMode('env')">环境监控</div>
+  </div>
+
+  <!-- 摄像头画面区域 -->
+  <div style="position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3;margin-bottom:12px">
+    <canvas id="vision-canvas" style="width:100%;height:100%;display:block"></canvas>
+    <div style="position:absolute;top:8px;left:10px;font-size:11px;color:#0f0;font-family:monospace;text-shadow:0 0 4px #0f0">
+      <span id="vision-fps">30 FPS</span> | <span id="vision-mode-label">CLEAN MODE</span>
+    </div>
+    <div style="position:absolute;top:8px;right:10px;font-size:11px;color:#f00;font-family:monospace;animation:pulse 1s infinite">REC</div>
+    <div style="position:absolute;bottom:8px;left:10px;right:10px;font-size:10px;color:rgba(255,255,255,.7);font-family:monospace">
+      <span id="vision-timestamp"></span>
+    </div>
+  </div>
+
+  <!-- AI识别结果 -->
+  <div class="card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:14px;font-weight:600">AI检测结果</span>
+      <span id="ai-confidence" style="font-size:12px;color:var(--green);font-weight:600">置信度: 95%</span>
+    </div>
+    <div id="ai-result-box" style="background:var(--bg);border-radius:8px;padding:10px">
+      <div id="ai-result-text" style="font-size:13px;color:var(--text)">清洁度评分: <b style="color:var(--green);font-size:18px">92</b>/100</div>
+      <div id="ai-result-detail" style="font-size:11px;color:var(--muted);margin-top:4px">检测区域: 栏位A3 | 脏污面积: 8%</div>
+    </div>
+  </div>
+
+  <!-- 检测统计 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+    <div class="card" style="text-align:center;padding:12px 8px">
+      <div style="font-size:18px;font-weight:700;color:var(--green)" id="v-stat-pass">156</div>
+      <div style="font-size:10px;color:var(--muted)">合格区域</div>
+    </div>
+    <div class="card" style="text-align:center;padding:12px 8px">
+      <div style="font-size:18px;font-weight:700;color:var(--orange)" id="v-stat-warn">12</div>
+      <div style="font-size:10px;color:var(--muted)">待清洗</div>
+    </div>
+    <div class="card" style="text-align:center;padding:12px 8px">
+      <div style="font-size:18px;font-weight:700;color:var(--accent)" id="v-stat-total">168</div>
+      <div style="font-size:10px;color:var(--muted)">今日检测</div>
+    </div>
+  </div>
+
+  <!-- 操作按钮 -->
+  <div style="display:flex;gap:10px">
+    <div class="btn btn-primary" style="flex:1;text-align:center" onclick="sendVisionCmd('snapshot')">截图保存</div>
+    <div class="btn btn-dark" style="flex:1;text-align:center" onclick="sendVisionCmd('toggle_detect')">暂停/继续</div>
+  </div>
+</div>
+
+<!-- Tab Bar -->
+<div class="tabbar">
+  <div class="tab-item active" onclick="switchPage('dashboard')"><span class="tab-icon">&#x1F4CA;</span><span class="tab-label">仪表盘</span></div>
+  <div class="tab-item" onclick="switchPage('control')"><span class="tab-icon">&#x1F3AE;</span><span class="tab-label">控制</span></div>
+  <div class="tab-item" onclick="switchPage('vision')"><span class="tab-icon">&#x1F4F7;</span><span class="tab-label">视觉</span></div>
+  <div class="tab-item" onclick="switchPage('alarm')"><span class="tab-icon">&#x1F6A8;</span><span class="tab-label">报警</span></div>
+  <div class="tab-item" onclick="switchPage('settings')"><span class="tab-icon">&#x2699;&#xFE0F;</span><span class="tab-label">设置</span></div>
+</div>
+
+<!-- MQTT.js CDN (多源备用) -->
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.0/dist/mqtt.min.js"></script>
+<script>
+if (typeof mqtt === 'undefined') {
+  document.write('<script src="https://unpkg.com/mqtt@5.3.0/dist/mqtt.min.js"><\/script>');
+}
+</script>
+<script>
+// ===== Global State =====
+let client = null;
+let deviceId = 'robot_001';
+let connected = false;
+let alarms = [];
+
+// ===== Page Navigation =====
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.tab-item').forEach((t,i) => {
+    t.classList.toggle('active', ['dashboard','control','vision','alarm','settings'][i] === name);
+  });
+  if (name === 'vision') startVisionSim();
+}
+
+// ===== Toast =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// ===== MQTT Connect =====
+function doConnect() {
+  // 检查mqtt库是否加载成功
+  if (typeof mqtt === 'undefined') {
+    showToast('MQTT库加载失败,请刷新页面重试');
+    return;
+  }
+
+  const broker = document.getElementById('cfg-broker').value.trim();
+  const port = document.getElementById('cfg-port').value.trim();
+  deviceId = document.getElementById('cfg-device').value.trim();
+  const user = document.getElementById('cfg-user').value.trim();
+  const pass = document.getElementById('cfg-pass').value.trim();
+
+  if (!broker || !deviceId) { showToast('请填写Broker和设备ID'); return; }
+
+  document.getElementById('btn-connect').textContent = '连接中...';
+  // HTTPS页面必须使用wss，否则浏览器会阻止混合内容
+  const isSecure = location.protocol === 'https:';
+  const protocol = isSecure ? 'wss' : 'ws';
+  const actualPort = isSecure && port === '8083' ? '8084' : port;
+  const url = protocol + '://' + broker + ':' + actualPort + '/mqtt';
+  const opts = { clientId: 'app_' + deviceId + '_' + Date.now().toString(36), clean: true, connectTimeout: 10000, reconnectPeriod: 0 };
+  if (user) { opts.username = user; opts.password = pass; }
+
+  showToast('正在连接: ' + url);
+
+  try {
+    if (client) { try { client.end(true); } catch(e){} }
+    client = mqtt.connect(url, opts);
+  } catch(e) {
+    showToast('连接异常: ' + e.message);
+    document.getElementById('btn-connect').textContent = '连接';
+    return;
+  }
+
+  // 超时检测
+  const connectTimer = setTimeout(function() {
+    if (!connected) {
+      showToast('连接超时，请检查网络或Broker地址');
+      document.getElementById('btn-connect').textContent = '连接';
+      try { client.end(true); } catch(e){}
+    }
+  }, 12000);
+
+  client.on('connect', function() {
+    clearTimeout(connectTimer);
+    connected = true;
+    updateConnBadge();
+    client.subscribe('robot/' + deviceId + '/status');
+    client.subscribe('robot/' + deviceId + '/alarm');
+    client.subscribe('robot/' + deviceId + '/heartbeat');
+    client.subscribe('robot/' + deviceId + '/response');
+    showToast('连接成功!');
+    document.getElementById('btn-connect').textContent = '已连接';
+    switchPage('dashboard');
+  });
+
+  client.on('close', function() {
+    connected = false;
+    updateConnBadge();
+  });
+
+  client.on('error', function(e) {
+    clearTimeout(connectTimer);
+    showToast('连接错误: ' + (e.message || '未知错误'));
+    document.getElementById('btn-connect').textContent = '连接';
+  });
+
+  client.on('offline', function() {
+    connected = false;
+    updateConnBadge();
+    document.getElementById('btn-connect').textContent = '连接';
+  });
+
+  client.on('message', function(topic, msg) {
+    try {
+      const data = JSON.parse(msg.toString());
+      if (topic.endsWith('/status')) onStatus(data);
+      else if (topic.endsWith('/alarm')) onAlarm(data);
+    } catch(e) {}
+  });
+}
+
+function updateConnBadge() {
+  const b = document.getElementById('conn-badge');
+  const t = document.getElementById('conn-text');
+  if (connected) { b.classList.add('online'); t.textContent = '在线'; }
+  else { b.classList.remove('online'); t.textContent = '未连接'; }
+}
+
+// ===== Status Update =====
+const STATE_NAMES = {0:'初始化',1:'自检中',2:'就绪待机',3:'手动模式',4:'自动模式',5:'高压冲洗中',6:'刮板清粪中',7:'消毒喷雾中',8:'复合清洗中',9:'返回充电桩',10:'充电中',99:'故障'};
+const STATE_COLORS = {0:'#94a3b8',1:'#f59e0b',2:'#22c55e',3:'#3b82f6',4:'#3b82f6',5:'#3b82f6',6:'#a855f7',7:'#22c55e',8:'#3b82f6',9:'#f59e0b',10:'#f59e0b',99:'#ef4444'};
+
+function onStatus(d) {
+  // State badge
+  const sb = document.getElementById('state-badge');
+  sb.textContent = d.state_name || STATE_NAMES[d.sys_state] || '未知';
+  const c = STATE_COLORS[d.sys_state] || '#94a3b8';
+  sb.style.background = c + '20'; sb.style.color = c;
+
+  // Gauges
+  setGauge('battery', d.battery_soc, 100);
+  setGauge('water', d.water_level_pct, 100);
+  setGauge('disinf', d.disinf_level_pct, 100);
+  setGauge('pressure', d.water_pressure_mpa, 20);
+  document.getElementById('v-battery').textContent = d.battery_soc.toFixed(0);
+  document.getElementById('v-water').textContent = d.water_level_pct.toFixed(0);
+  document.getElementById('v-disinf').textContent = d.disinf_level_pct.toFixed(0);
+  document.getElementById('v-pressure').textContent = d.water_pressure_mpa.toFixed(1);
+
+  // Info
+  document.getElementById('v-pos').textContent = d.pos_x.toFixed(2) + ', ' + d.pos_y.toFixed(2) + ' m';
+  document.getElementById('v-ultra').textContent = '前' + d.ultra_dist_front + 'mm 后' + d.ultra_dist_rear + 'mm';
+  document.getElementById('v-area').textContent = d.total_wash_area.toFixed(1) + ' m\u00B2';
+  document.getElementById('v-imu').textContent = (d.imu_roll * 57.3).toFixed(1) + '\u00B0';
+
+  // Reel
+  document.getElementById('v-reel').textContent = d.reel_position_pct + '%';
+  document.getElementById('bar-reel').style.width = d.reel_position_pct + '%';
+  document.getElementById('reel-mode').style.display = d.reel_auto_follow ? 'inline' : 'none';
+  document.getElementById('v-valve').textContent = '补水阀: ' + (d.water_valve_on ? '开启' : '关闭');
+  document.getElementById('v-valve').style.color = d.water_valve_on ? 'var(--green)' : 'var(--muted)';
+  document.getElementById('v-tank').textContent = d.water_tank_full ? '水箱已满' : '';
+}
+
+function setGauge(id, val, max) {
+  const pct = Math.min(100, Math.max(0, val / max * 100));
+  document.getElementById('bar-' + id).style.width = pct + '%';
+}
+
+// ===== Commands =====
+function sendCmd(action, args) {
+  if (!client || !connected) { showToast('未连接'); return; }
+  const payload = { msg_id: 'm' + Date.now(), ts: Date.now()/1000, action: action, args: args || {} };
+  client.publish('robot/' + deviceId + '/command', JSON.stringify(payload), {qos:1});
+  showToast('已发送: ' + action);
+}
+
+function sendMove(dir) {
+  if (!client || !connected) return;
+  const payload = { msg_id: 'm' + Date.now(), ts: Date.now()/1000, action: 'manual', args: {direction: dir} };
+  client.publish('robot/' + deviceId + '/command', JSON.stringify(payload), {qos:1});
+}
+
+function confirmEstop() {
+  if (confirm('确定要执行紧急停止？机器人将立即停止所有动作！')) {
+    sendCmd('estop');
+  }
+}
+
+// ===== Params =====
+function updateSlider(id, el) {
+  const labels = {1:'pv-pressure', 2:'pv-speed', 3:'pv-conc'};
+  const units = {1:' MPa', 2:' m/s', 3:' %'};
+  const dec = {1:1, 2:2, 3:1};
+  document.getElementById(labels[id]).textContent = parseFloat(el.value).toFixed(dec[id]) + units[id];
+}
+
+function applyParam(id) {
+  if (!client || !connected) { showToast('未连接'); return; }
+  const sliders = {1:'sl-pressure', 2:'sl-speed', 3:'sl-conc'};
+  const val = parseFloat(document.getElementById(sliders[id]).value);
+  const payload = { msg_id: 'p' + Date.now(), ts: Date.now()/1000, param_id: id, value: val };
+  client.publish('robot/' + deviceId + '/param', JSON.stringify(payload), {qos:1});
+  showToast('参数已下发');
+}
+
+// ===== Alarms =====
+function onAlarm(d) {
+  const FAULT_NAMES = {0:'无故障',1:'急停按下',2:'左电机故障',3:'右电机故障',4:'水压异常',5:'缺水',6:'倾翻',7:'碰撞',8:'电量过低',9:'通信丢失',10:'卷管器堵转',11:'补水阀故障'};
+  alarms.unshift({ name: d.fault_name || FAULT_NAMES[d.fault_code] || '未知故障', level: d.level || 'warning', time: new Date(d.ts*1000).toLocaleTimeString() });
+  if (alarms.length > 50) alarms = alarms.slice(0, 50);
+  renderAlarms();
+  if (navigator.vibrate) navigator.vibrate(200);
+  showToast('报警: ' + alarms[0].name);
+}
+
+function renderAlarms() {
+  const el = document.getElementById('alarm-list');
+  const cnt = document.getElementById('alarm-count');
+  if (alarms.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--muted);font-size:13px">暂无报警记录</div>';
+    cnt.style.display = 'none';
+    return;
+  }
+  cnt.textContent = alarms.length; cnt.style.display = 'inline';
+  el.innerHTML = alarms.map(a => '<div class="alarm-item"><div class="alarm-dot ' + a.level + '"></div><div class="alarm-info"><div class="alarm-name">' + a.name + '</div><div class="alarm-time">' + a.time + '</div></div><div style="font-size:11px;color:' + (a.level==='critical'?'var(--red)':'var(--orange)') + '">' + (a.level==='critical'?'严重':'警告') + '</div></div>').join('');
+}
+
+function clearAlarms() { alarms = []; renderAlarms(); showToast('已清除'); }
+
+// ===== Init =====
+// Load saved config
+try {
+  const saved = localStorage.getItem('mqtt_cfg');
+  if (saved) {
+    const cfg = JSON.parse(saved);
+    if (cfg.broker) document.getElementById('cfg-broker').value = cfg.broker;
+    if (cfg.port) document.getElementById('cfg-port').value = cfg.port;
+    if (cfg.device) document.getElementById('cfg-device').value = cfg.device;
+  }
+} catch(e){}
+
+// Save config on connect
+const origConnect = doConnect;
+doConnect = function() {
+  try {
+    localStorage.setItem('mqtt_cfg', JSON.stringify({
+      broker: document.getElementById('cfg-broker').value,
+      port: document.getElementById('cfg-port').value,
+      device: document.getElementById('cfg-device').value
+    }));
+  } catch(e){}
+  origConnect();
+};
+
+// ===== PWA 安装支持 =====
+let deferredPrompt = null;
+
+// 检测浏览器环境
+function detectBrowser() {
+  const ua = navigator.userAgent.toLowerCase();
+  if (/micromessenger/i.test(ua)) return 'wechat';
+  if (/qq\//i.test(ua)) return 'qq';
+  if (/ucbrowser/i.test(ua)) return 'uc';
+  if (/baiduboxapp/i.test(ua)) return 'baidu';
+  if (/ios|iphone|ipad/i.test(ua) && /safari/i.test(ua)) return 'safari';
+  if (/ios|iphone|ipad/i.test(ua)) return 'ios-other';
+  if (/chrome/i.test(ua) && !/edge/i.test(ua)) return 'chrome';
+  return 'other';
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallBanner('native');
+});
+
+// 页面加载后检查是否需要显示手动安装引导
+setTimeout(() => {
+  if (!deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+    const browser = detectBrowser();
+    if (browser === 'wechat' || browser === 'qq') {
+      showInstallBanner('open-browser');
+    } else if (browser === 'safari' || browser === 'ios-other') {
+      showInstallBanner('ios');
+    } else {
+      showInstallBanner('manual');
+    }
+  }
+}, 2000);
+
+function showInstallBanner(mode) {
+  if (document.getElementById('install-banner')) return;
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+  const banner = document.createElement('div');
+  banner.id = 'install-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;padding:12px 16px;z-index:9999;font-size:13px;box-shadow:0 2px 12px rgba(0,0,0,.3)';
+
+  if (mode === 'native') {
+    banner.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between"><span>安装到主屏幕，获得原生APP体验</span><div><button onclick="installApp()" style="background:#fff;color:#1e40af;border:none;padding:6px 14px;border-radius:6px;font-weight:600;margin-right:8px;cursor:pointer">安装</button><button onclick="dismissInstall()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:6px 10px;border-radius:6px;cursor:pointer">关闭</button></div></div>';
+  } else if (mode === 'open-browser') {
+    banner.innerHTML = '<div style="line-height:1.5"><b>添加到主屏幕：</b><br>请点击右上角 ··· → 选择「在浏览器中打开」<br>然后使用浏览器菜单「添加到主屏幕」</div><button onclick="dismissInstall()" style="position:absolute;top:8px;right:8px;background:transparent;color:#fff;border:none;font-size:18px;cursor:pointer">×</button>';
+  } else if (mode === 'ios') {
+    banner.innerHTML = '<div style="line-height:1.5"><b>添加到主屏幕：</b><br>点击底部分享按钮 <span style="font-size:16px">⬆</span> → 选择「添加到主屏幕」</div><button onclick="dismissInstall()" style="position:absolute;top:8px;right:8px;background:transparent;color:#fff;border:none;font-size:18px;cursor:pointer">×</button>';
+  } else {
+    banner.innerHTML = '<div style="line-height:1.5"><b>添加到主屏幕：</b><br>点击浏览器菜单(⋮) → 选择「添加到主屏幕」或「安装应用」</div><button onclick="dismissInstall()" style="position:absolute;top:8px;right:8px;background:transparent;color:#fff;border:none;font-size:18px;cursor:pointer">×</button>';
+  }
+  document.body.prepend(banner);
+}
+
+async function installApp() {
+  if (!deferredPrompt) {
+    // deferredPrompt 已失效，显示手动引导
+    dismissInstall();
+    const browser = detectBrowser();
+    if (browser === 'safari' || browser === 'ios-other') {
+      showInstallBanner('ios');
+    } else {
+      showInstallBanner('manual');
+    }
+    return;
+  }
+  try {
+    deferredPrompt.prompt();
+    const result = await deferredPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+      showToast('安装成功！');
+    }
+    deferredPrompt = null;
+    dismissInstall();
+  } catch (err) {
+    console.error('PWA install error:', err);
+    deferredPrompt = null;
+    dismissInstall();
+    // prompt 失败，显示手动安装方式
+    showInstallBanner('manual');
+  }
+}
+
+function dismissInstall() {
+  const b = document.getElementById('install-banner');
+  if (b) b.remove();
+}
+
+// Service Worker 注册
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ===== QR Code Generator (Pure JS) =====
+function generateQR(canvas, text) {
+  // 使用一个轻量级QR库 (inline)
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+  script.onload = function() {
+    const qr = qrcode(0, 'M');
+    qr.addData(text);
+    qr.make();
+    const size = qr.getModuleCount();
+    const cellSize = Math.floor(200 / size);
+    const totalSize = cellSize * size;
+    canvas.width = totalSize;
+    canvas.height = totalSize;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, totalSize, totalSize);
+    ctx.fillStyle = '#1e293b';
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (qr.isDark(r, c)) {
+          ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+  };
+  document.head.appendChild(script);
+}
+
+// 页面加载后生成分享二维码
+window.addEventListener('load', function() {
+  const shareUrl = window.location.href.split('?')[0];
+  const canvas = document.getElementById('share-qr');
+  const urlEl = document.getElementById('share-url');
+  if (canvas && urlEl) {
+    urlEl.textContent = shareUrl;
+    generateQR(canvas, shareUrl);
+  }
+});
+
+function copyShareLink() {
+  const url = window.location.href.split('?')[0];
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => showToast('链接已复制'));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('链接已复制');
+  }
+}
+
+// ===== Vision System (视觉监控) =====
+let visionMode = 'clean';
+let visionTimer = null;
+let visionRunning = false;
+
+function switchVisionMode(mode) {
+  visionMode = mode;
+  document.querySelectorAll('.vision-mode').forEach(el => el.classList.remove('active'));
+  document.getElementById('vmode-' + mode).classList.add('active');
+  const labels = {clean:'CLEAN MODE', pig:'PIG DETECT', env:'ENV MONITOR'};
+  document.getElementById('vision-mode-label').textContent = labels[mode];
+  updateVisionResult();
+  // 通过MQTT发送模式切换
+  if (client && connected) {
+    client.publish(`pigfarm/${deviceId}/cmd/vision`, JSON.stringify({action:'set_mode', mode: mode}));
+  }
+}
+
+function startVisionSim() {
+  if (visionRunning) return;
+  visionRunning = true;
+  const canvas = document.getElementById('vision-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = 640;
+  canvas.height = 480;
+
+  function drawFrame() {
+    if (!visionRunning) return;
+    const w = canvas.width, h = canvas.height;
+
+    // 模拟摄像头画面 - 带噪点的场景
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, w, h);
+
+    // 绘制栏位网格(模拟猪舍俯视)
+    ctx.strokeStyle = 'rgba(59,130,246,0.3)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 80) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += 60) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // 根据模式绘制不同内容
+    if (visionMode === 'clean') {
+      // 清洁度模式 - 热力图效果
+      for (let i = 0; i < 8; i++) {
+        const cx = 60 + Math.random() * (w - 120);
+        const cy = 60 + Math.random() * (h - 120);
+        const r = 30 + Math.random() * 40;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        const clean = Math.random() > 0.15;
+        if (clean) {
+          grad.addColorStop(0, 'rgba(34,197,94,0.4)');
+          grad.addColorStop(1, 'rgba(34,197,94,0)');
+        } else {
+          grad.addColorStop(0, 'rgba(239,68,68,0.5)');
+          grad.addColorStop(1, 'rgba(239,68,68,0)');
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+    } else if (visionMode === 'pig') {
+      // 猪只识别 - 检测框
+      const pigs = [{x:80,y:100,w:120,h:90},{x:300,y:150,w:130,h:95},{x:450,y:80,w:110,h:85},{x:150,y:300,w:125,h:90},{x:400,y:320,w:115,h:88}];
+      pigs.forEach((p, i) => {
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x + Math.random()*4-2, p.y + Math.random()*4-2, p.w, p.h);
+        ctx.fillStyle = 'rgba(34,197,94,0.8)';
+        ctx.font = '11px monospace';
+        ctx.fillText(`pig_${i+1} 97%`, p.x, p.y - 4);
+      });
+    } else {
+      // 环境监控 - 温湿度热区
+      for (let gx = 0; gx < 8; gx++) {
+        for (let gy = 0; gy < 6; gy++) {
+          const temp = 18 + Math.random() * 10;
+          const alpha = (temp - 18) / 10 * 0.5;
+          ctx.fillStyle = temp > 25 ? `rgba(239,68,68,${alpha})` : `rgba(59,130,246,${alpha})`;
+          ctx.fillRect(gx * 80, gy * 80, 78, 58);
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.font = '10px monospace';
+          ctx.fillText(`${temp.toFixed(1)}C`, gx*80+25, gy*80+35);
+        }
+      }
+    }
+
+    // 扫描线效果
+    const scanY = (Date.now() / 20) % h;
+    ctx.strokeStyle = 'rgba(59,130,246,0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, scanY); ctx.lineTo(w, scanY); ctx.stroke();
+
+    // 时间戳
+    document.getElementById('vision-timestamp').textContent = new Date().toLocaleString('zh-CN');
+
+    visionTimer = requestAnimationFrame(drawFrame);
+  }
+  drawFrame();
+}
+
+function updateVisionResult() {
+  const text = document.getElementById('ai-result-text');
+  const detail = document.getElementById('ai-result-detail');
+  const conf = document.getElementById('ai-confidence');
+  if (visionMode === 'clean') {
+    const score = 85 + Math.floor(Math.random() * 13);
+    text.innerHTML = `清洁度评分: <b style="color:${score>85?'var(--green)':'var(--orange)'};font-size:18px">${score}</b>/100`;
+    detail.textContent = `检测区域: 栏位A${1+Math.floor(Math.random()*6)} | 脏污面积: ${100-score}%`;
+    conf.textContent = `置信度: ${92+Math.floor(Math.random()*7)}%`;
+  } else if (visionMode === 'pig') {
+    const count = 3 + Math.floor(Math.random() * 5);
+    text.innerHTML = `检测到猪只: <b style="color:var(--accent);font-size:18px">${count}</b> 头`;
+    detail.textContent = `活跃度: 正常 | 异常行为: 未检测到`;
+    conf.textContent = `置信度: ${94+Math.floor(Math.random()*5)}%`;
+  } else {
+    const temp = (22 + Math.random() * 4).toFixed(1);
+    const hum = (55 + Math.random() * 15).toFixed(0);
+    text.innerHTML = `温度: <b style="color:var(--accent);font-size:18px">${temp}</b>C 湿度: <b style="color:var(--accent);font-size:18px">${hum}</b>%`;
+    detail.textContent = `NH3: 12ppm | CO2: 820ppm | 通风: 正常`;
+    conf.textContent = `传感器: 在线`;
+  }
+}
+
+function sendVisionCmd(action) {
+  if (client && connected) {
+    client.publish(`pigfarm/${deviceId}/cmd/vision`, JSON.stringify({action: action, mode: visionMode}));
+    showToast(action === 'snapshot' ? '已截图保存' : '检测状态已切换');
+  } else {
+    showToast(action === 'snapshot' ? '截图(演示)' : '状态切换(演示)');
+  }
+}
+</script>
+</body>
+</html>
